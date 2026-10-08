@@ -81,13 +81,65 @@ h1 { font-size: 1.6rem; margin: 0 0 6px; overflow-wrap: anywhere; }
     return { title: data.title, emoji: data.emoji, date: data.targetDate, countsUp: !!data.countUp, repeats: !!data.repeatRule, period: !!data.period };
   }
 
+  // Preset themes' colours, as in TimerStyle.swift (StyleTheme.all).
+  var THEMES = {
+    system: [[], null], sunset: [["#FF7E5F", "#FEB47B"], "#FFFFFF"], ocean: [["#2193B0", "#6DD5ED"], "#FFFFFF"],
+    forest: [["#134E5E", "#71B280"], "#FFFFFF"], grape: [["#8E2DE2", "#4A00E0"], "#FFFFFF"],
+    midnight: [["#0F2027", "#2C5364"], "#FFFFFF"], fire: [["#FF512F", "#DD2476"], "#FFFFFF"],
+    peach: [["#FFDDE1", "#EE9CA7"], "#5A2A35"], mint: [["#D4FC79", "#96E6A1"], "#1F3B2C"],
+    ink: [["#1C1C1E"], "#FFFFFF"], paper: [["#F5F1E8"], "#2B2B2B"]
+  };
+
+  function base64url(text) {
+    var bytes = new TextEncoder().encode(text), binary = "";
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  // The short form (SharedCountdown.Compact) turned back into the full one.
+  function fullPayload(text) {
+    try {
+      var base64 = text.replace(/-/g, "+").replace(/_/g, "/");
+      while (base64.length % 4) base64 += "=";
+      var data = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(base64), function (c) { return c.charCodeAt(0); })));
+      if (data.v !== 2) return null;
+      var y = data.y || {};
+      var style = { design: y.v || "classic", font: y.f || "rounded", units: y.n || "days", showsProgress: y.b !== "0",
+                    photoDim: 0.3, photoFocusX: 0.5, photoFocusY: 0.5, photoZoom: 1 };
+      if (y.h === "custom") {
+        style.backgroundColors = (y.c ? y.c.split(",") : []).map(function (c) { return "#" + c; });
+        if (y.x) style.textColor = "#" + y.x;
+      } else {
+        var id = y.h || "system", theme = THEMES[id] || THEMES.system;
+        style.themeID = id;
+        style.backgroundColors = theme[0];
+        if (theme[1]) style.textColor = theme[1];
+      }
+      var extras = { tf: "ticketFrom", tt: "ticketTo", tn: "ticketFlight", ts: "ticketSeat", o: "decoration" };
+      for (var key in extras) if (y[key]) style[extras[key]] = y[key];
+      if (y.a) style.adventTapToOpen = y.a === "1";
+      var full = { title: data.t, targetDate: data.d, startDate: data.s || data.d, style: style };
+      if (data.e) full.emoji = data.e;
+      if (data.r) full.repeatRule = data.r;
+      if (data.p) full.period = data.p;
+      if (data.m) full.steps = data.m;
+      if (data.u) full.countUp = true;
+      if (data.h) full.holiday = data.h;
+      return base64url(JSON.stringify(full));
+    } catch (e) {
+      return null;
+    }
+  }
+
   var payload = location.hash.replace(/^#/, "");
   var card = document.getElementById("card");
   if (!payload) return showError();
   var countdown;
   try { countdown = decode(payload); } catch (e) { return showError(); }
 
-  document.getElementById("add").href = "widgetdown://add?c=" + payload;
+  // The button uses the older full format, which every version of the app
+  // reads (1.0 doesn't know the short one); newer versions read both.
+  document.getElementById("add").href = "widgetdown://add?c=" + (fullPayload(payload) || payload);
   document.title = (countdown.title || "A countdown") + " – Widgetdown";
   document.getElementById("title").textContent = countdown.title || "A countdown";
   if (countdown.emoji) {
