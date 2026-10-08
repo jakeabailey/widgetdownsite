@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["246627Q9BS.com.jakeabailey.progress"],
+        "components": [
+          { "/": "/add/*", "comment": "A countdown someone shared" }
+        ]
+      }
+    ]
+  }
+}
